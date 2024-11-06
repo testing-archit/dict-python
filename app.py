@@ -1,45 +1,72 @@
-import json
+import requests
+from collections import defaultdict
 
-# Load word data from a JSON file
-with open('word_data.json', 'r') as f:
-    word_data = json.load(f)
-
-def get_word_info(word):
+def get_word_definition(word):
     """
-    Looks up a word in the dictionary and returns its meaning and an example sentence.
-    
+    Fetch the definition of a given word using the dictionaryapi.dev API.
+
     Parameters:
-    word (str): The word to look up
-    
+    word (str): The word to look up.
+
     Returns:
-    dict: A dictionary containing the word's meaning and example sentence, or None if the word is not found
+    dict: A dictionary containing the word's definition information, or None if the word is not found.
     """
-    word = word.lower()  # Convert the word to lowercase to ensure case-insensitive search
-    if word in word_data:
-        # Extract the meaning and the example sentence
-        meaning = word_data[word][0]
-        example_sentence = word_data[word][1] if len(word_data[word]) > 1 else "No example sentence available."
-        
-        return {
-            'meaning': meaning,
-            'example_sentence': example_sentence,
-        }
-    else:
+    try:
+        url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{word.lower()}"
+        response = requests.get(url)
+        response.raise_for_status()  # Raise an exception for non-2xx status codes
+        data = response.json()
+
+        if data:
+            word_info = {
+                "word": data[0]["word"],
+                "phonetic": data[0].get("phonetic", "N/A"),
+                "origin": data[0].get("origin", "N/A"),
+                "meanings": [
+                    {
+                        "partOfSpeech": meaning["partOfSpeech"],
+                        "definitions": [
+                            {
+                                "definition": definition["definition"],
+                                "example": definition.get("example", "N/A"),
+                                "synonyms": definition.get("synonyms", []),
+                                "antonyms": definition.get("antonyms", [])
+                            } for definition in meaning["definitions"]
+                        ]
+                    } for meaning in data[0]["meanings"]
+                ]
+            }
+            return word_info
+        else:
+            return None
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching definition for '{word}': {e}")
         return None
 
 def main():
-    while True:
-        user_input = input("Enter a word (or 'exit' to quit): ")
-        if user_input.lower() == 'exit':
-            break
-        
-        word_info = get_word_info(user_input)
-        if word_info:
-            print(f"Word: {user_input}")
-            print(f"Meaning: {word_info['meaning']}")
-            print(f"Example Sentence: {word_info['example_sentence']}")
-        else:
-            print(f"Sorry, '{user_input}' is not found in the dictionary.")
+    # Prompt the user to enter a word
+    word = input("Enter a word: ")
+
+    # Fetch the word definition
+    word_info = get_word_definition(word)
+    if word_info:
+        print(f"Word: {word_info['word']}")
+        print(f"Phonetic: {word_info['phonetic']}")
+        print(f"Origin: {word_info['origin']}")
+        print("Meanings:")
+        for meaning in word_info["meanings"]:
+            print(f"- Part of Speech: {meaning['partOfSpeech']}")
+            for definition in meaning["definitions"]:
+                print(f"  - Definition: {definition['definition']}")
+                if definition["example"] != "N/A":
+                    print(f"    Example: {definition['example']}")
+                if definition["synonyms"]:
+                    print(f"    Synonyms: {', '.join(definition['synonyms'])}")
+                if definition["antonyms"]:
+                    print(f"    Antonyms: {', '.join(definition['antonyms'])}")
+            print()
+    else:
+        print(f"Sorry, '{word}' not found in the dictionary.")
 
 if __name__ == "__main__":
     main()
